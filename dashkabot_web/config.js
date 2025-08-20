@@ -1,13 +1,12 @@
 window.DashkaBotConfig = {
-    apiBase: 'http://172.20.10.4:8080',  // Изменить с localhost на 172.20.10.4
+    apiBase: 'https://api.dashkapolish.swapoil.de',
     endpoints: {
         translate: '/translate',
-        test: '/test', 
-        stats: '/stats',
+        health: '/health', 
         languages: '/languages'
     },
     websocket: {
-        url: 'ws://172.20.10.4:8765',  // Изменить WebSocket URL
+        url: 'wss://api.dashkapolish.swapoil.de/ws',
         enabled: true
     }
 };
