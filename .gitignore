@@ -1,0 +1,38 @@
+# Environment files with secrets
+.env.local
+.env.production
+.env.development
+*.env.backup
+
+# API Keys and secrets
+*api_key*
+*secret*
+REDACTED
+
+# Logs
+logs/
+*.log
+
+# Node modules
+node_modules/
+npm-debug.log*
+
+# Temporary files
+tmp/
+temp/
+uploads/
+cache/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Runtime
+run/
+*.pid
