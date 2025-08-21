@@ -1,5 +1,5 @@
 window.DashkaBotConfig = {
-    apiBase: 'https://api.dashkapolish.swapoil.de',
+    apiBase: 'http://dashkapolish.swapoil.de/api',
     endpoints: {
         translate: '/translate',
         health: '/health', 

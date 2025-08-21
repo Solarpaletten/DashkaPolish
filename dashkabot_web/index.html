@@ -419,8 +419,8 @@
 
     <script>
         // API Configuration with environment fallback
-        const API_URL = "https://api.dashkapolish.swapoil.de";
-        const WS_URL = "wss://api.dashkapolish.swapoil.de/ws";
+        const API_URL = "http://dashkapolish.swapoil.de/api";
+        const WS_URL = "ws://dashkapolish.swapoil.de/api/ws";
         let currentRole = 'user';
         let isRecording = false;
         let recognition = null;
@@ -429,7 +429,7 @@
 
         // Конфигурация серверов - ИСПРАВЛЕННЫЕ URL
         const config = {
-            aiServer: "https://api.dashkapolish.swapoil.de", // Используем текущий домен
+            aiServer: "http://dashkapolish.swapoil.de/api", // Используем текущий домен
             wsServer: `wss://${window.location.hostname}:8765`, // WebSocket на порту 8765
             enableWebSocket: true,
             enableSpeech: true
@@ -723,7 +723,7 @@
                     const altResponse = await fetch(`${API_URL}/health`);
                     if (altResponse.ok) {
                         updateConnectionStatus('ai', true);
-                        console.log('✅ AI Server connected via https://api.dashkapolish.swapoil.de/health');
+                        console.log('✅ AI Server connected via http://dashkapolish.swapoil.de/api/health');
                     }
                 } catch (altError) {
                     console.error('❌ Alternative endpoint also failed:', altError);
