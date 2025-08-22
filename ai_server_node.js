@@ -4,158 +4,49 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const { UnifiedTranslationService } = require('./unifiedTranslationService');
-const WebSocket = require('ws');
-const http = require('http');
-require('dotenv').config();
 
 class DashkaBotNodeServer {
   constructor() {
     this.app = express();
-    this.port = process.env.PORT || 8080;
+    this.port = 8080;
     this.translationService = new UnifiedTranslationService();
     this.requestCount = 0;
     this.translationCache = new Map();
-    
 
-    // ✅ НОВОЕ: WebSocket сервер
-    this.clients = new Map();
-    
     this.setupMiddleware();
     this.setupRoutes();
-    this.setupWebSocket();  // ✅ Добавляем WebSocket
-    
+
     console.log('🤖 DashkaBot Node.js Server инициализирован');
-  }
-
-  // ✅ НОВАЯ ФУНКЦИЯ: Настройка WebSocket
-  setupWebSocket() {
-    // Создаем HTTP сервер для Express
-    this.server = http.createServer(this.app);
-    
-    // Создаем WebSocket сервер на том же порту
-    this.wss = new WebSocket.Server({ 
-      server: this.server,
-      path: '/ws'  // WebSocket на /ws path
-    });
-    
-    this.wss.on('connection', (ws, request) => {
-      const clientId = `client_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      
-      this.clients.set(clientId, {
-        ws: ws,
-        role: 'unknown',
-        connected_at: new Date()
-      });
-
-      console.log(`🔗 WebSocket подключение: ${clientId} (всего: ${this.clients.size})`);
-
-      // Приветственное сообщение
-      ws.send(JSON.stringify({
-        type: 'welcome',
-        client_id: clientId,
-        message: 'Подключение к DashkaBot Cloud успешно!',
-        timestamp: new Date().toISOString()
-      }));
-
-      // Обработка сообщений
-      ws.on('message', (message) => {
-        try {
-          const data = JSON.parse(message);
-          data.sender_id = clientId;
-          data.timestamp = new Date().toISOString();
-
-          console.log(`📨 WebSocket сообщение от ${clientId}:`, data.type);
-
-          // Обработка разных типов сообщений
-          switch (data.type) {
-            case 'set_role':
-              this.setClientRole(clientId, data.role);
-              break;
-            case 'translation':
-              this.broadcastTranslation(clientId, data);
-              break;
-            default:
-              this.broadcastToOthers(clientId, data);
-          }
-        } catch (error) {
-          console.error(`❌ Ошибка WebSocket сообщения от ${clientId}:`, error);
-        }
-      });
-
-      // Отключение
-      ws.on('close', () => {
-        console.log(`❌ WebSocket отключение: ${clientId} (осталось: ${this.clients.size - 1})`);
-        this.clients.delete(clientId);
-      });
-
-      ws.on('error', (error) => {
-        console.error(`❌ WebSocket ошибка для ${clientId}:`, error);
-      });
-    });
-  }
-
-  // Установка роли клиента
-  setClientRole(clientId, role) {
-    if (this.clients.has(clientId)) {
-      this.clients.get(clientId).role = role;
-      console.log(`👤 Клиент ${clientId} установил роль: ${role}`);
-      
-      // Подтверждение установки роли
-      this.clients.get(clientId).ws.send(JSON.stringify({
-        type: 'role_confirmed',
-        role: role,
-        timestamp: new Date().toISOString()
-      }));
-    }
-  }
-
-  // Трансляция перевода
-  broadcastTranslation(senderId, data) {
-    console.log(`🌍 Трансляция перевода от ${senderId}`);
-    
-    const message = {
-      ...data,
-      sender_role: this.clients.get(senderId)?.role || 'unknown',
-      sender_id: senderId
-    };
-
-    this.broadcastToOthers(senderId, message);
-  }
-
-  // Трансляция другим клиентам
-  broadcastToOthers(senderId, data) {
-    let sentCount = 0;
-    
-    this.clients.forEach((client, clientId) => {
-      if (clientId !== senderId && client.ws.readyState === WebSocket.OPEN) {
-        try {
-          client.ws.send(JSON.stringify(data));
-          sentCount++;
-        } catch (error) {
-          console.error(`❌ Ошибка отправки сообщения ${clientId}:`, error);
-        }
-      }
-    });
-
-    if (sentCount > 0) {
-      console.log(`📡 Сообщение отправлено ${sentCount} клиентам`);
-    }
   }
 
   setupMiddleware() {
     // CORS для веб-интерфейса и мобильного
-    this.app.use(cors({
-      origin: '*',
-      methods: ['GET', 'POST', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization']
-    }));
+    const allowedOrigins = process.env.CORS_ORIGIN
+      ? process.env.CORS_ORIGIN.split(',')
+      : ['*'];
+
+    // this.app.use(cors({
+    //   origin: allowedOrigins,
+    //   methods: ['GET', 'POST', 'OPTIONS'],
+    //   allowedHeaders: ['Content-Type', 'Authorization'],
+    //   credentials: true
+    // }));
+
+    // Добавим простые CORS заголовки
+    this.app.use((req, res, next) => {
+      res.header('Access-Control-Allow-Origin', 'https://dashkapolish.swapoil.de');
+      res.header('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+      res.header('Access-Control-Allow-Headers', 'Content-Type');
+      if (req.method === 'OPTIONS') {
+        res.sendStatus(200);
+      } else {
+        next();
+      }
+    });
 
     // JSON парсер
     this.app.use(express.json({ limit: '10mb' }));
 
-    // Статические файлы веб-интерфейса  
-    this.app.use(express.static(path.join(__dirname, 'dashkabot_web')));
-    
     // Multer для загрузки аудио файлов
     const upload = multer({
       dest: 'temp/',
@@ -168,7 +59,7 @@ class DashkaBotNodeServer {
         }
       }
     });
-    
+
     this.upload = upload;
 
     // Логирование запросов
@@ -179,18 +70,14 @@ class DashkaBotNodeServer {
   }
 
   setupRoutes() {
-    // ✅ ГЛАВНАЯ СТРАНИЦА - ОТДАЕМ HTML
-    this.app.get('/', (req, res) => {
-      res.sendFile(path.join(__dirname, 'dashkabot_web', 'index.html'));
-    });
-
-    // Health check
+    // Health check - совместимость с DashkaBot
     this.app.get('/health', (req, res) => {
       res.json({
         status: 'healthy',
-        service: 'DashkaBot Cloud Server',
+        service: 'DashkaBot AI Server (Node.js)',
         version: '3.0.0',
-        websocket_clients: this.clients.size,
+        mode: 'production',
+        timestamp: new Date().toISOString(),
         requests_processed: this.requestCount,
         supported_languages: Object.keys(this.translationService.supportedLanguages).length,
         openai_configured: !!process.env.OPENAI_API_KEY,
@@ -199,37 +86,16 @@ class DashkaBotNodeServer {
       });
     });
 
-    // API Info - для разработчиков
-    this.app.get('/api', (req, res) => {
-      res.json({
-        service: 'DashkaBot AI Server (Node.js)',
-        version: '3.0.0',
-        status: 'running',
-        endpoints: [
-          'GET /health - Проверка состояния',
-          'POST /translate - Текстовый перевод',
-          'POST /voice-translate - Голосовой перевод',
-          'POST /detect-language - Определение языка',
-          'GET /languages - Поддерживаемые языки',
-          'GET /stats - Статистика',
-          'GET /test - Тестовый endpoint'
-        ],
-        websocket: 'wss://dashka-translate.onrender.com/ws',
-        supported_languages: Object.keys(this.translationService.supportedLanguages).length,
-        openai_configured: !!process.env.OPENAI_API_KEY
-      });
-    });
-
     // Текстовый перевод - основной endpoint для DashkaBot
     this.app.post('/translate', async (req, res) => {
       try {
         this.requestCount++;
         const startTime = Date.now();
-        
-        const { 
-          text, 
-          source_language = 'RU', 
-          target_language = 'DE',
+
+        const {
+          text,
+          source_language = 'RU',
+          target_language = 'PL',
           fromLang,
           toLang,
           from,
@@ -238,7 +104,7 @@ class DashkaBotNodeServer {
 
         // Поддержка разных форматов параметров
         const sourceCode = source_language || fromLang || from || 'RU';
-        const targetCode = target_language || toLang || to || 'DE';
+        const targetCode = target_language || toLang || to || 'PL';
 
         if (!text || text.trim() === '') {
           return res.status(400).json({
@@ -267,8 +133,8 @@ class DashkaBotNodeServer {
 
         // Выполняем перевод
         const result = await this.translationService.translateText(
-          text.trim(), 
-          normalizedSource, 
+          text.trim(),
+          normalizedSource,
           normalizedTarget
         );
 
@@ -288,7 +154,7 @@ class DashkaBotNodeServer {
 
         // Сохраняем в кэш
         this.translationCache.set(cacheKey, response);
-        
+
         // Ограничиваем размер кэша
         if (this.translationCache.size > 1000) {
           const firstKey = this.translationCache.keys().next().value;
@@ -312,17 +178,17 @@ class DashkaBotNodeServer {
     this.app.post('/voice-translate', this.upload.single('audio'), async (req, res) => {
       try {
         if (!req.file) {
-          return res.status(400).json({ 
+          return res.status(400).json({
             status: 'error',
-            message: 'Аудио файл не загружен' 
+            message: 'Аудио файл не загружен'
           });
         }
 
-        const { 
-          fromLang = 'RU', 
-          toLang = 'DE',
+        const {
+          fromLang = 'RU',
+          toLang = 'PL',
           source_language = 'RU',
-          target_language = 'DE'
+          target_language = 'PL'
         } = req.body;
 
         const sourceCode = fromLang || source_language;
@@ -359,9 +225,9 @@ class DashkaBotNodeServer {
         if (req.file && fs.existsSync(req.file.path)) {
           fs.unlinkSync(req.file.path);
         }
-        res.status(500).json({ 
+        res.status(500).json({
           status: 'error',
-          message: error.message 
+          message: error.message
         });
       }
     });
@@ -370,11 +236,11 @@ class DashkaBotNodeServer {
     this.app.post('/detect-language', async (req, res) => {
       try {
         const { text } = req.body;
-        
+
         if (!text) {
-          return res.status(400).json({ 
+          return res.status(400).json({
             status: 'error',
-            message: 'Текст не указан' 
+            message: 'Текст не указан'
           });
         }
 
@@ -388,9 +254,9 @@ class DashkaBotNodeServer {
 
       } catch (error) {
         console.error('❌ Ошибка определения языка:', error);
-        res.status(500).json({ 
+        res.status(500).json({
           status: 'error',
-          message: error.message 
+          message: error.message
         });
       }
     });
@@ -413,7 +279,6 @@ class DashkaBotNodeServer {
         stats: {
           requests_processed: this.requestCount,
           cache_size: this.translationCache.size,
-          websocket_clients: this.clients.size,
           supported_languages: Object.keys(this.translationService.supportedLanguages).length,
           openai_configured: !!process.env.OPENAI_API_KEY,
           service_stats: this.translationService.getStats(),
@@ -432,9 +297,28 @@ class DashkaBotNodeServer {
       res.json({
         status: 'success',
         message: 'DashkaBot AI Server работает отлично!',
-        websocket_url: 'wss://dashka-translate.onrender.com/ws',
         timestamp: new Date().toISOString(),
         version: '3.0.0'
+      });
+    });
+
+    // Корневой маршрут
+    this.app.get('/', (req, res) => {
+      res.json({
+        service: 'DashkaBot AI Server (Node.js)',
+        version: '3.0.0',
+        status: 'running',
+        endpoints: [
+          'GET /health - Проверка состояния',
+          'POST /translate - Текстовый перевод',
+          'POST /voice-translate - Голосовой перевод',
+          'POST /detect-language - Определение языка',
+          'GET /languages - Поддерживаемые языки',
+          'GET /stats - Статистика',
+          'GET /test - Тестовый endpoint'
+        ],
+        supported_languages: Object.keys(this.translationService.supportedLanguages).length,
+        openai_configured: !!process.env.OPENAI_API_KEY
       });
     });
 
@@ -457,24 +341,27 @@ class DashkaBotNodeServer {
     });
   }
 
-  // ✅ ОБНОВЛЕННЫЙ start() метод
-  start() {
+  async start() {
     try {
       // Создаем необходимые директории
-      const dirs = ['temp', 'tmp', 'uploads', 'cache', 'dashkabot_web'];
+      const dirs = ['temp', 'tmp', 'uploads', 'cache'];
       dirs.forEach(dir => {
         if (!fs.existsSync(dir)) {
           fs.mkdirSync(dir, { recursive: true });
         }
       });
 
-      // Запускаем сервер с WebSocket поддержкой
-      this.server.listen(this.port, "0.0.0.0", () => {
-        console.log('🚀 DashkaBot Cloud Server запущен!');
-        console.log(`🌍 URL: https://dashkapolish.swapoil.de`);
-        console.log(`🔗 Port: ${this.port}`);
-        console.log(`🔌 WebSocket: wss://dashka-translate.onrender.com/ws`);
-        console.log(`📱 Ready for mobile browsers with WebSocket sync!`);
+      // Запускаем сервер на мобильном IP для совместимости
+      this.server = this.app.listen(this.port, "0.0.0.0", () => {
+        console.log('🚀 DashkaBot AI Server запущен!');
+        console.log(`🔗 Доступен на: http://172.20.10.4:${this.port}`);
+        console.log(`🏠 Локально: http://localhost:${this.port}`);
+        console.log('📋 Endpoints:');
+        console.log(`   GET  http://172.20.10.4:${this.port}/health`);
+        console.log(`   POST http://172.20.10.4:${this.port}/translate`);
+        console.log(`   POST http://172.20.10.4:${this.port}/voice-translate`);
+        console.log(`   GET  http://172.20.10.4:${this.port}/languages`);
+        console.log(`   GET  http://172.20.10.4:${this.port}/stats`);
         console.log(`🌍 Поддерживаемые языки: ${Object.keys(this.translationService.supportedLanguages).join(', ')}`);
         console.log(`🔑 OpenAI API: ${process.env.OPENAI_API_KEY ? '✅ Настроен' : '❌ Не настроен'}`);
       });
@@ -488,14 +375,14 @@ class DashkaBotNodeServer {
       process.exit(1);
     }
   }
-  
+
   shutdown() {
     console.log('🛑 Получен сигнал завершения...');
-    
+
     if (this.server) {
       this.server.close(() => {
         console.log('✅ Сервер остановлен');
-        
+
         // Очистка временных файлов
         try {
           ['temp', 'tmp'].forEach(dir => {
@@ -513,7 +400,7 @@ class DashkaBotNodeServer {
         } catch (err) {
           console.log('Очистка временных файлов:', err.message);
         }
-        
+
         process.exit(0);
       });
     } else {

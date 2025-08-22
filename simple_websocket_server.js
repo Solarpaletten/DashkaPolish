@@ -188,7 +188,7 @@ const server = http.createServer((req, res) => {
 // Запуск серверов
 const wsServer = new SimpleWebSocketServer(8765);
 server.listen(8766, () => {
-    console.log('📊 HTTP статистика на http://localhost:8766/health');
+    console.log('📊 HTTP статистика на http://localhost:8765/health');
 });
 
 // Graceful shutdown

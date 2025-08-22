@@ -16,7 +16,7 @@
   "translation": {
     "default_source": "ru",     
     "default_target": "pl",    
-    "supported_languages": ["ru", "pl", "en", "de"],
+    "supported_languages": ["ru", "pl"],
     "confidence_threshold": 0.8
   },
   "audio": {
