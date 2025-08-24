@@ -39,3 +39,4 @@ run/
 backup/
 ecosystem.config.js
 textng.txt
+.env
