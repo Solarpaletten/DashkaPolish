@@ -36,3 +36,6 @@ Thumbs.db
 # Runtime
 run/
 *.pid
+backup/
+ecosystem.config.js
+textng.txt
