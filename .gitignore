@@ -3,6 +3,7 @@
 .env.production
 .env.development
 *.env.backup
+.env*
 
 # API Keys and secrets
 *api_key*
